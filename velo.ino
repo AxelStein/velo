@@ -1,13 +1,14 @@
+#include <EEPROM.h>
 #include <LiquidCrystal_I2C.h>
 #include <Wire.h>
 
 #define WHEEL_PIN 2
 #define PEDAL_PIN 3
 #define PEDAL_LED_PIN 4
-# define WHEEL_LENGTH 0.00207 // in km for 26"
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 
+float wheel_length;
 uint8_t wheel_pin;
 boolean wheel_pin_enabled;
 
@@ -31,12 +32,47 @@ String bt_cmd; // bluetooth command
 uint8_t bt_cmd_val = -1;
 
 void setup() {
+    Serial.begin(9600);
+    
     lcd.init();
     lcd.backlight();
     lcd.noBlink();
+
+    int wheel_diameter = EEPROM.read(0);
+    if (wheel_diameter == 255) {
+      wheel_diameter = 65; // default
+      EEPROM.write(0, wheel_diameter);
+    }
+    wheel_diameter *= 3.14;
+    wheel_length = wheel_diameter / 100000.000000;
 }
 
 void loop() {
+    /*-----------------------------------------------------------------------------*/
+    /*
+    while (Serial.available()) { // пока приходят данные
+        char c = Serial.read(); // считываем их
+        if (c == '#') {
+            bt_cmd_val = COM_SET_WHEEL_LENGTH;
+            continue;
+        } else if (c == '$') {
+            //bt_cmd_val = COM_SET_CALC_TIME;
+            continue;
+        }
+        bt_cmd += c; // и формируем строку
+        delay(1);
+    }
+
+    switch (bt_cmd_val) {
+    case COM_SET_WHEEL_LENGTH:
+        //wheel_length = bt_cmd.toFloat();
+        break;
+    }
+    bt_cmd_val = -1;
+    */
+
+    /*-----------------------------------------------------------------------------*/
+    
     timer_now = millis();
 
     /*-----------------------------------------------------------------------------*/
@@ -44,7 +80,7 @@ void loop() {
     if (wheel_pin == HIGH && !wheel_pin_enabled) {
         wheel_pin_enabled = true;
         wheel_counter++;
-        distance += WHEEL_LENGTH;
+        distance += wheel_length;
     } else if (wheel_pin == LOW) {
         wheel_pin_enabled = false;
     }
@@ -92,7 +128,7 @@ void loop() {
         lcd.print(" km");
 
         // calculate wheel speed km/h
-        float d = wheel_counter * WHEEL_LENGTH;
+        float d = wheel_counter * wheel_length;
         wheel_counter = 0;
         wheel_speed = d / 0.00083; // 3 secs in hour
         if (wheel_speed >= max_wheel_speed) {
@@ -106,6 +142,8 @@ void loop() {
         lcd.print((int) wheel_speed);
         lcd.print(" km/h");
     }
+    
+    /*-----------------------------------------------------------------------------*/
 
     delay(1);
     
