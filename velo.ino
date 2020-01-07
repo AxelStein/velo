@@ -28,7 +28,7 @@ unsigned long pedal_interval; // ms
 uint8_t pedal_interval_counter;
 unsigned long pedal_timer; // ms
 
-boolean go_wake_up;
+boolean wake_up;
 unsigned long timer_now; // ms
 
 String bt_cmd; // bluetooth command
@@ -48,8 +48,8 @@ void setup() {
     display_distance();
 }
 
-void wake_up() {
-    go_wake_up = true;
+void go_wake_up() {
+    wake_up = true;
 }
 
 void go_sleep() {
@@ -57,7 +57,7 @@ void go_sleep() {
     lcd.noBacklight();
     digitalWrite(PEDAL_LED_PIN, LOW);
     
-    attachInterrupt(digitalPinToInterrupt(WHEEL_PIN), wake_up, RISING);    
+    attachInterrupt(digitalPinToInterrupt(WHEEL_PIN), go_wake_up, RISING);
     LowPower.powerDown(SLEEP_FOREVER, ADC_OFF, BOD_OFF);
 }
 
@@ -95,8 +95,8 @@ void display_distance() {
 }
 
 void loop() {
-    if (go_wake_up) {
-        go_wake_up = false;
+    if (wake_up) {
+        wake_up = false;
         lcd.display();
         lcd.backlight();
         detachInterrupt(digitalPinToInterrupt(WHEEL_PIN));
@@ -129,11 +129,12 @@ void loop() {
         wheel_interval = 0;
         wheel_interval_counter = 0;
     } else if (wheel_timer != 0 && (timer_now - wheel_timer) >= 3000) { // idle
-        wheel_timer = 0;
+        if ((timer_now - wheel_timer) >= 6000) {
+            wheel_timer = 0;
+            go_sleep();
+        }
         display_wheel_speed(0);
         display_distance();
-        
-        go_sleep();
     }
 
     /*-----------------------------------------------------------------------------*/
