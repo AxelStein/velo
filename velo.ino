@@ -1,14 +1,15 @@
+#include <LowPower.h>
 #include <EEPROM.h>
 #include <LiquidCrystal_I2C.h>
 #include <Wire.h>
 #include <SoftwareSerial.h>
 
-#define WHEEL_PIN 10
-#define PEDAL_PIN 11
+#define WHEEL_PIN 2
+#define PEDAL_PIN 3
 #define PEDAL_LED_PIN 12
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);
-SoftwareSerial BTSerial(2, 3); // RX | TX
+//SoftwareSerial BTSerial(2, 3); // RX | TX
 
 float wheel_length; // km
 uint8_t wheel_pin;
@@ -27,14 +28,15 @@ unsigned long pedal_interval; // ms
 uint8_t pedal_interval_counter;
 unsigned long pedal_timer; // ms
 
+boolean go_wake_up;
 unsigned long timer_now; // ms
 
 String bt_cmd; // bluetooth command
 uint8_t bt_cmd_val = -1;
 
 void setup() {
-    BTSerial.begin(9600);
-    
+    //BTSerial.begin(9600);
+    Serial.begin(9600);
     lcd.init();
     lcd.backlight();
     lcd.noBlink();
@@ -46,11 +48,20 @@ void setup() {
     display_distance();
 }
 
+void wake_up() {
+    go_wake_up = true;
+}
+
+void go_sleep() {
+    lcd.noDisplay();
+    lcd.noBacklight();
+    digitalWrite(PEDAL_LED_PIN, LOW);
+    
+    attachInterrupt(digitalPinToInterrupt(WHEEL_PIN), wake_up, RISING);    
+    LowPower.powerDown(SLEEP_FOREVER, ADC_OFF, BOD_OFF);
+}
+
 void calc_wheel_length(int wheel_diameter) {
-    if (wheel_diameter < 0) {
-        BTSerial.println("Error: wheel_diameter can't be < 0");
-        return;
-    }
     if (wheel_diameter == 255) {
         wheel_diameter = 65; // default
         EEPROM.write(0, wheel_diameter);
@@ -84,6 +95,12 @@ void display_distance() {
 }
 
 void loop() {
+    if (go_wake_up) {
+        go_wake_up = false;
+        lcd.display();
+        lcd.backlight();
+        detachInterrupt(digitalPinToInterrupt(WHEEL_PIN));
+    }
     timer_now = millis();
 
     wheel_pin = digitalRead(WHEEL_PIN);
@@ -115,6 +132,8 @@ void loop() {
         wheel_timer = 0;
         display_wheel_speed(0);
         display_distance();
+        
+        go_sleep();
     }
 
     /*-----------------------------------------------------------------------------*/
