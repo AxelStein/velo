@@ -1,12 +1,14 @@
 #include <EEPROM.h>
 #include <LiquidCrystal_I2C.h>
 #include <Wire.h>
+#include <SoftwareSerial.h>
 
 #define WHEEL_PIN 2
 #define PEDAL_PIN 3
 #define PEDAL_LED_PIN 4
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);
+SoftwareSerial BTSerial(2, 3); // RX | TX
 
 float wheel_length;
 uint8_t wheel_pin;
@@ -32,14 +34,21 @@ String bt_cmd; // bluetooth command
 uint8_t bt_cmd_val = -1;
 
 void setup() {
-    Serial.begin(9600);
+    BTSerial.begin(9600);
     
     lcd.init();
     lcd.backlight();
     lcd.noBlink();
 
-    int wheel_diameter = EEPROM.read(0);
-    if (wheel_diameter == 255) {
+    calc_wheel_length(EEPROM.read(0));
+}
+
+void calc_wheel_length(int wheel_diameter) {
+  if (wheel_diameter < 0) {
+      BTSerial.println("Error: wheel_diameter can't be < 0");
+      return;
+  }
+  if (wheel_diameter == 255) {
       wheel_diameter = 65; // default
       EEPROM.write(0, wheel_diameter);
     }
@@ -50,13 +59,10 @@ void setup() {
 void loop() {
     /*-----------------------------------------------------------------------------*/
     /*
-    while (Serial.available()) { // пока приходят данные
-        char c = Serial.read(); // считываем их
-        if (c == '#') {
-            bt_cmd_val = COM_SET_WHEEL_LENGTH;
-            continue;
-        } else if (c == '$') {
-            //bt_cmd_val = COM_SET_CALC_TIME;
+    while (BTSerial.available()) { // пока приходят данные
+        char c = BTSerial.read(); // считываем их
+        if (c == '-') {
+            bt_cmd_val = CMD_SET_WHEEL_DIAMETER;
             continue;
         }
         bt_cmd += c; // и формируем строку
@@ -64,11 +70,19 @@ void loop() {
     }
 
     switch (bt_cmd_val) {
-    case COM_SET_WHEEL_LENGTH:
-        //wheel_length = bt_cmd.toFloat();
-        break;
+        case CMD_SET_WHEEL_DIAMETER:
+            int wheel_diameter = bt_cmd.toInt();
+            EEPROM.write(0, wheel_diameter);
+            calc_wheel_length(wheel_diameter);
+            break;
     }
     bt_cmd_val = -1;
+    */
+
+    /*
+    if (Serial.available() && (millis() - timer_now >= 1000)) {
+      Serial.println("/" + millis());
+    }
     */
 
     /*-----------------------------------------------------------------------------*/
@@ -142,98 +156,17 @@ void loop() {
         lcd.print((int) wheel_speed);
         lcd.print(" km/h");
     }
+
+    /*
+        if (BTSerial.available()) {
+          BTSerial.println("$" + wheel_speed);
+          BTSerial.println("%" + max_wheel_speed);
+          BTSerial.println("#" + distance);
+          BTSerial.println("*" + rpm);
+        }
+        */
     
     /*-----------------------------------------------------------------------------*/
 
     delay(1);
-    
-    /*
-    while (Serial.available()) { // пока приходят данные
-        char c = Serial.read(); // считываем их
-        if (c == '#') {
-            bt_cmd_val = COM_SET_WHEEL_LENGTH;
-            continue;
-        } else if (c == '$') {
-            bt_cmd_val = COM_SET_CALC_TIME;
-            continue;
-        }
-        bt_cmd += c; // и формируем строку
-        delay(1);
-    }
-
-    switch (bt_cmd_val) {
-    case COM_SET_WHEEL_LENGTH:
-        //wheel_length = bt_cmd.toFloat();
-        break;
-    case COM_SET_CALC_TIME:
-        //bt_cmd.toInt();
-        break;
-    }
-    bt_cmd_val = -1;
-
-    wheel_pin = digitalRead(WHEEL_PIN);
-    if (wheel_pin == HIGH && !wheel_pin_enabled) {
-        wheel_pin_enabled = true;
-        wheel_rate++;
-        distance += WHEEL_LENGTH;
-    } else if (wheel_pin == LOW) {
-        wheel_pin_enabled = false;
-    }
-
-    if (millis() - timer >= CALC_TIME) {
-        timer = millis();
-        //float d = wheel_rate * WHEEL_LENGTH;
-        //distance += d;
-
-        // display distance
-        lcd.setCursor(0, 1);
-        lcd.print(distance);
-        lcd.print(" km");
-
-        wheel_rate = 0;
-        wheel_speed = d / HOUR_CONSTANT;
-
-        // display wheel_speed
-        lcd.setCursor(0, 0);
-        lcd.print("       ");
-        lcd.setCursor(0, 0);
-        lcd.print((int) wheel_speed);
-        lcd.print(" km/h");
-
-        if (wheel_speed >= max_wheel_speed) {
-            max_wheel_speed = wheel_speed;
-
-            // display max_wheel_speed
-            //lcd.print("max: ");
-            //lcd.print(wheel_speed);
-            //lcd.print(" km/h");
-        }
-    }
-    */
-
-    
-
-    /*
-    if (millis() - pedal_timer >= CALC_TIME) {
-        pedal_timer = millis();
-
-        pedal_rate *= PEDAL_MULT;
-        // display cadence per minute
-        lcd.setCursor(9, 0);
-        lcd.print("        ");
-        lcd.setCursor(9, 0);
-        lcd.print(pedal_rate);
-        lcd.print(" rpm");
-
-        if (pedal_rate >= 70) {
-            // enable diod
-            digitalWrite(PEDAL_LED_PIN, HIGH);
-        } else {
-            // disable diod
-            digitalWrite(PEDAL_LED_PIN, LOW);
-        }
-
-        pedal_rate = 0;
-    }
-    */
 }
