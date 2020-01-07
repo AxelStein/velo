@@ -3,9 +3,9 @@
 #include <Wire.h>
 #include <SoftwareSerial.h>
 
-#define WHEEL_PIN 2
-#define PEDAL_PIN 3
-#define PEDAL_LED_PIN 4
+#define WHEEL_PIN 10
+#define PEDAL_PIN 11
+#define PEDAL_LED_PIN 12
 
 LiquidCrystal_I2C lcd(0x27, 16, 2);
 SoftwareSerial BTSerial(2, 3); // RX | TX
