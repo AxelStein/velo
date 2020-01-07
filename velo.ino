@@ -128,7 +128,7 @@ void loop() {
         
         wheel_interval = 0;
         wheel_interval_counter = 0;
-    } else if (wheel_timer != 0 && (timer_now - wheel_timer) >= 3000) { // idle
+    } else if (timer_now - wheel_timer >= 3000) { // idle
         if ((timer_now - wheel_timer) >= 6000) {
             wheel_timer = 0;
             go_sleep();
