@@ -35,11 +35,6 @@ unsigned long btn_timer; // ms
 boolean display_turned;
 uint8_t display_menu;
 boolean pwr_save_mode;
-uint8_t pedal_pin;
-boolean pedal_pin_high;
-unsigned long pedal_interval; // ms
-uint16_t pedal_interval_counter;
-unsigned long pedal_timer; // ms
 boolean wake_up;
 unsigned long timer_now; // ms
 
@@ -257,7 +252,10 @@ void loop() {
         }
     }
 
-    /*-----------------------------------------------------------------------------*/
+    delay(10);
+}
+
+/*-----------------------------------------------------------------------------*/
     /*
     pedal_pin = digitalRead(PEDAL_PIN);
     if (pedal_pin == LOW && !pedal_pin_high) {
@@ -289,10 +287,12 @@ void loop() {
         display_data();
     }
     */
-
-    delay(10);
-}
-
+    
+//uint8_t pedal_pin;
+//boolean pedal_pin_high;
+//unsigned long pedal_interval; // ms
+//uint16_t pedal_interval_counter;
+//unsigned long pedal_timer; // ms
 //#define CMD_SET_WHEEL_DIAMETER 0
 //String bt_cmd; // bluetooth command
 //uint8_t bt_cmd_val = -1;
