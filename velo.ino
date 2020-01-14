@@ -13,19 +13,19 @@
 #define LONG_PRESS_TIME 750
 #define EEPROM_WHEEL_DIAMETER 0
 #define EEPROM_PWR_SAVE_MODE 1
+#define WHEEL_COUNTER_VALUE 5
 
 Adafruit_SSD1306 display(128, 32, &Wire, -1);
 
 float wheel_length; // km
 uint8_t wheel_pin;
-boolean wheel_pin_high;
-uint8_t wheel_counter;
-uint8_t wheel_rpm;
+boolean wheel_pin_enabled;
+uint16_t wheel_counter;
+uint16_t wheel_rpm;
 float wheel_speed; // km/h
 float max_wheel_speed; // km/h
 unsigned long wheel_timer; // ms
-unsigned long wheel_interval; // ms
-uint8_t wheel_interval_counter;
+unsigned long wheel_start_timer; // ms
 float distance; // km
 uint8_t cadence;
 uint8_t btn_state;
@@ -38,7 +38,7 @@ boolean pwr_save_mode;
 uint8_t pedal_pin;
 boolean pedal_pin_high;
 unsigned long pedal_interval; // ms
-uint8_t pedal_interval_counter;
+uint16_t pedal_interval_counter;
 unsigned long pedal_timer; // ms
 boolean wake_up;
 unsigned long timer_now; // ms
@@ -211,20 +211,23 @@ void loop() {
 
     /*-----------------------------------------------------------------------------*/
     wheel_pin = digitalRead(WHEEL_PIN);
-    if (wheel_pin == HIGH && !wheel_pin_high) {
-        wheel_pin_high = true;
-        if (wheel_timer != 0) {
-            wheel_interval += (timer_now - wheel_timer);
-            wheel_interval_counter++;
-            distance += wheel_length;
-        }
+    if (wheel_pin == LOW && !wheel_pin_enabled) {
+        wheel_pin_enabled = true;
         wheel_timer = timer_now;
-    } else if (wheel_pin == LOW) {
-        wheel_pin_high = false;
+        if (wheel_start_timer == 0) {
+            wheel_start_timer = timer_now;
+        }
+        wheel_counter++;
+        distance += wheel_length;
+        //Serial.println(wheel_counter);
+    } else if (wheel_pin == HIGH) {
+        wheel_pin_enabled = false;
     }
 
-    if (wheel_interval >= 3000) {
-        float avg = wheel_interval / wheel_interval_counter; // average interval
+    if (wheel_counter == WHEEL_COUNTER_VALUE) {
+        unsigned long interval = timer_now - wheel_start_timer;
+        //Serial.println(interval + String(" ms"));
+        float avg = interval / WHEEL_COUNTER_VALUE;
         avg = 1000 / avg;
         wheel_rpm = avg * 60;
         wheel_speed = wheel_rpm * 60 * wheel_length;
@@ -233,13 +236,19 @@ void loop() {
         }
         display_data();
         
-        wheel_interval = 0;
-        wheel_interval_counter = 0;
-    } 
-    if (wheel_speed != 0 && timer_now - wheel_timer >= 3000) { // idle
-        wheel_speed = 0;
-        wheel_rpm = 0;
-        display_data();
+        //Serial.println(wheel_speed + String(" km/h; ") + wheel_rpm + String(" rpm"));
+        
+        wheel_counter = 0;
+        wheel_start_timer = 0;
+    }
+    if (timer_now - wheel_timer >= 3000) {
+        if (wheel_speed != 0 || (wheel_counter < WHEEL_COUNTER_VALUE && wheel_counter > 0)) {
+            wheel_speed = 0;
+            wheel_rpm = 0;
+            wheel_counter = 0;
+            wheel_start_timer = 0;
+            display_data();
+        }
     }
     if (timer_now - wheel_timer >= 30000) { // 30 sec
         wheel_timer = 0;
@@ -249,15 +258,16 @@ void loop() {
     }
 
     /*-----------------------------------------------------------------------------*/
+    /*
     pedal_pin = digitalRead(PEDAL_PIN);
-    if (pedal_pin == HIGH && !pedal_pin_high) {
+    if (pedal_pin == LOW && !pedal_pin_high) {
         pedal_pin_high = true;
         if (pedal_timer != 0) {
             pedal_interval += (timer_now - pedal_timer);
             pedal_interval_counter++;
         }
         pedal_timer = timer_now;
-    } else if (pedal_pin == LOW) {
+    } else if (pedal_pin == HIGH) {
         pedal_pin_high = false;
     }
 
@@ -278,6 +288,7 @@ void loop() {
         digitalWrite(LED_PIN, LOW);
         display_data();
     }
+    */
 
     delay(10);
 }
