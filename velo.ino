@@ -20,6 +20,7 @@ float wheel_length; // km
 uint8_t wheel_pin;
 boolean wheel_pin_high;
 uint8_t wheel_counter;
+uint8_t wheel_rpm;
 float wheel_speed; // km/h
 float max_wheel_speed; // km/h
 unsigned long wheel_timer; // ms
@@ -102,7 +103,8 @@ void display_data() {
     
             // cadence
             display.setCursor(0, 16);
-            display.print(cadence + String(" rpm"));
+            //display.print(cadence + String(" rpm"));
+            display.print(wheel_rpm + String(" rpm"));
             break;
             
         case 1:
@@ -224,7 +226,8 @@ void loop() {
     if (wheel_interval >= 3000) {
         float avg = wheel_interval / wheel_interval_counter; // average interval
         avg = 1000 / avg;
-        wheel_speed = (avg * 60) * 60 * wheel_length;
+        wheel_rpm = avg * 60;
+        wheel_speed = wheel_rpm * 60 * wheel_length;
         if (wheel_speed >= max_wheel_speed) {
             max_wheel_speed = wheel_speed;
         }
@@ -235,6 +238,7 @@ void loop() {
     } 
     if (wheel_speed != 0 && timer_now - wheel_timer >= 3000) { // idle
         wheel_speed = 0;
+        wheel_rpm = 0;
         display_data();
     }
     if (timer_now - wheel_timer >= 30000) { // 30 sec
@@ -275,7 +279,7 @@ void loop() {
         display_data();
     }
 
-    delay(1);
+    delay(10);
 }
 
 //#define CMD_SET_WHEEL_DIAMETER 0
