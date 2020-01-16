@@ -23,6 +23,9 @@ uint16_t wheel_counter;
 uint16_t wheel_rpm;
 float wheel_speed; // km/h
 float max_wheel_speed; // km/h
+float avg_wsp[5];
+uint8_t avg_wsp_cnt;
+float avg_wheel_speed; // km/h
 unsigned long wheel_timer; // ms
 unsigned long wheel_start_timer; // ms
 float distance; // km
@@ -71,16 +74,16 @@ void calc_wheel_length(int wheel_diameter) {
     wheel_length = wheel_diameter / 100000.0;
 }
 
+void enable_pwr_save_mode(boolean enable) {
+    pwr_save_mode = !pwr_save_mode;
+    EEPROM.write(EEPROM_PWR_SAVE_MODE, pwr_save_mode);
+}
+
 void switch_display_menu() {
     display_menu++;
     if (display_menu == 5) {
         display_menu = 0;
     }
-}
-
-void enable_pwr_save_mode(boolean enable) {
-    pwr_save_mode = !pwr_save_mode;
-    EEPROM.write(EEPROM_PWR_SAVE_MODE, pwr_save_mode);
 }
 
 void display_data() {
@@ -94,9 +97,8 @@ void display_data() {
             display.setCursor(0, 0);
             display.print(wheel_speed + String(" km/h"));
     
-            // cadence
+            // rpm
             display.setCursor(0, 16);
-            //display.print(cadence + String(" rpm"));
             display.print(wheel_rpm + String(" rpm"));
             break;
             
@@ -105,12 +107,18 @@ void display_data() {
             display.setCursor(0, 0);
             display.print(max_wheel_speed + String(" km/h"));
             
-            // distance
+            // avg speed
             display.setCursor(0, 16);
+            display.print(avg_wheel_speed + String(" km/h"));
+            break;
+
+        case 2:
+            // distance
+            display.setCursor(0, 0);
             display.print(distance + String(" km"));
             break;
             
-        case 2: // power save mode
+        case 3: // power save mode
             display.setCursor(0, 0);
             display.print("pwr save:");
 
@@ -118,7 +126,7 @@ void display_data() {
             display.print(pwr_save_mode ? "on" : "off");
             break;
 
-        case 3: // input voltage
+        case 4: // input voltage
             display.setCursor(0, 0);
             display.print("voltage:");
 
@@ -127,12 +135,13 @@ void display_data() {
             display.setCursor(0, 16);
             display.print(v + String(" v"));
             
-            if (v < 3.9) { // charge
+            if (v < 3.0) { // charge
                 display.print(" !!!");
             }
             break;
     }
 
+    /*
     if (display_menu == 4) { // sick!!!
         display.setCursor(0, 0);
         display.print("diameter:");
@@ -140,6 +149,7 @@ void display_data() {
         display.setCursor(0, 16);
         display.print(EEPROM.read(EEPROM_WHEEL_DIAMETER) + String(" cm"));
     }
+    */
     
     display.display();
 }
@@ -165,6 +175,30 @@ float read_voltage() {
     result |= ADCH << 8;
     result = 1126400L / result; // Back-calculate AVcc in mV
     return result / 1000.0;
+}
+
+void calc_avg_speed(float wsp) {
+    if (wsp == 0) {
+        return;
+    }
+    
+    avg_wsp[avg_wsp_cnt] = wsp;
+    avg_wsp_cnt++;
+    
+    if (avg_wsp_cnt == 5) {
+        avg_wsp_cnt = 0;
+        float a = 0;
+        for (uint8_t i = 0; i < 5; i++) {
+            a += avg_wsp[i];
+        }
+        
+        a /= 5;
+        if (avg_wheel_speed == 0) {
+            avg_wheel_speed = a;
+        } else {
+            avg_wheel_speed = (avg_wheel_speed + a) / 2;
+        }
+    }
 }
 
 void loop() {
@@ -227,6 +261,7 @@ void loop() {
         if (wheel_speed >= max_wheel_speed) {
             max_wheel_speed = wheel_speed;
         }
+        calc_avg_speed(wheel_speed);
         display_data();
         
         //Serial.println(wheel_speed + String(" km/h; ") + wheel_rpm + String(" rpm"));
