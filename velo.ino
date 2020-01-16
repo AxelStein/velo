@@ -8,8 +8,7 @@
 
 #define WHEEL_PIN 2
 #define PEDAL_PIN 3
-#define LED_PIN 4
-#define BTN_PIN 5
+#define BTN_PIN 4
 #define LONG_PRESS_TIME 750
 #define EEPROM_WHEEL_DIAMETER 0
 #define EEPROM_PWR_SAVE_MODE 1
@@ -39,6 +38,7 @@ boolean wake_up;
 unsigned long timer_now; // ms
 
 void setup() {
+    pinMode(BTN_PIN, INPUT_PULLUP);
     Serial.begin(9600);
     delay(2000);
     
@@ -57,9 +57,7 @@ void go_wake_up() {
 }
 
 void go_sleep() {
-    turn_display(false);
-    digitalWrite(LED_PIN, LOW);
-    
+    turn_display(false);    
     attachInterrupt(digitalPinToInterrupt(WHEEL_PIN), go_wake_up, CHANGE);
     LowPower.powerDown(SLEEP_FOREVER, ADC_OFF, BOD_OFF);
 }
@@ -179,11 +177,11 @@ void loop() {
     timer_now = millis();
 
     btn_state = digitalRead(BTN_PIN);
-    if (!btn_pressed && btn_state == HIGH) {
+    if (!btn_pressed && btn_state == LOW) {
         btn_pressed = true;
         btn_timer = timer_now;
     }
-    if (btn_pressed && btn_state == LOW) {
+    if (btn_pressed && btn_state == HIGH) {
         btn_pressed = false;
         if (!btn_long_pressed && display_turned) { // single press
             switch_display_menu();
