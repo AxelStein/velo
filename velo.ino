@@ -13,6 +13,11 @@
 #define EEPROM_WHEEL_DIAMETER 0
 #define EEPROM_PWR_SAVE_MODE 1
 #define WHEEL_COUNTER_VALUE 5
+#define MENU_WHEEL 0
+#define MENU_SPEED 1
+#define MENU_DISTANCE 2
+#define MENU_POWER 3
+#define MENU_VOLTAGE 4
 
 Adafruit_SSD1306 display(128, 32, &Wire, -1);
 
@@ -92,7 +97,7 @@ void display_data() {
     display.setTextColor(SSD1306_WHITE);
 
     switch(display_menu) {
-        case 0:
+        case MENU_WHEEL:
             // speed
             display.setCursor(0, 0);
             display.print(wheel_speed + String(" km/h"));
@@ -102,7 +107,7 @@ void display_data() {
             display.print(wheel_rpm + String(" rpm"));
             break;
             
-        case 1:
+        case MENU_SPEED:
             // max speed
             display.setCursor(0, 0);
             display.print(max_wheel_speed + String(" km/h"));
@@ -112,13 +117,13 @@ void display_data() {
             display.print(avg_wheel_speed + String(" km/h"));
             break;
 
-        case 2:
+        case MENU_DISTANCE:
             // distance
             display.setCursor(0, 0);
             display.print(distance + String(" km"));
             break;
             
-        case 3: // power save mode
+        case MENU_POWER: // power save mode
             display.setCursor(0, 0);
             display.print("pwr save:");
 
@@ -126,7 +131,7 @@ void display_data() {
             display.print(pwr_save_mode ? "on" : "off");
             break;
 
-        case 4: // input voltage
+        case MENU_VOLTAGE: // input voltage
             display.setCursor(0, 0);
             display.print("voltage:");
 
@@ -225,7 +230,7 @@ void loop() {
     }
     if (btn_pressed && !btn_long_pressed && timer_now - btn_timer >= LONG_PRESS_TIME) {
         btn_long_pressed = true;
-        if (display_menu == 2) {
+        if (display_menu == MENU_POWER) {
             enable_pwr_save_mode(!pwr_save_mode);
             display_data();
             if (pwr_save_mode) {
@@ -285,7 +290,7 @@ void loop() {
         }
     }
 
-    delay(10);
+    delay(1);
 }
 
 /*-----------------------------------------------------------------------------*/
