@@ -24,8 +24,11 @@
 Adafruit_SSD1306 display(128, 32, &Wire, -1);
 boolean display_turned;
 boolean pwr_save_mode;
+
+String serial_input = "";
 char buf[BUF_SIZE];
 char str_tmp[6];
+
 uint8_t display_menu;
 boolean sleep_mode;
 
@@ -48,7 +51,9 @@ float speed_arr[5];
 uint8_t speed_arr_index;
 
 void setup() {
+    attachInterrupt(digitalPinToInterrupt(WHEEL_PIN), detect_rotation, RISING);
     pinMode(BTN_PIN, INPUT_PULLUP);
+    
     Serial.begin(9600);
     delay(2000);
     
@@ -58,19 +63,23 @@ void setup() {
 
     display_turned = true;
     pwr_save_mode = EEPROM.read(EEPROM_PWR_SAVE_MODE);
-    calc_wheel_length(EEPROM.read(EEPROM_WHEEL_DIAMETER));
+    calc_wheel_length();
     display_data();
-
-    attachInterrupt(digitalPinToInterrupt(WHEEL_PIN), detect_rotation, RISING);
 }
 
-void calc_wheel_length(int wheel_diameter) {
-    if (wheel_diameter == 255) {
-        wheel_diameter = 65; // default
-        EEPROM.write(EEPROM_WHEEL_DIAMETER, wheel_diameter);
+void calc_wheel_length() {
+    int diameter = EEPROM.read(EEPROM_WHEEL_DIAMETER); // cm
+    if (diameter == 255) {
+        diameter = 65; // default
+        set_wheel_diameter(diameter);
     }
-    wheel_diameter *= 3.14;
-    wheel_length = wheel_diameter / 100000.0;
+    wheel_length = (diameter * 3.14) / 100000.0;
+}
+
+void set_wheel_diameter(int diameter) {
+    if (diameter > 0 && diameter < 255) {
+        EEPROM.write(EEPROM_WHEEL_DIAMETER, diameter);
+    }
 }
 
 void turn_display(boolean on) {
@@ -297,6 +306,20 @@ void loop() {
         wheel_rotation_last_time = 0;
         if (pwr_save_mode) {
             enable_sleep_mode();
+        }
+    }
+
+    while (Serial.available() > 0) {
+        int ch = Serial.read();
+        if (isDigit(ch)) {
+            serial_input += (char) ch;
+        }
+        if (ch == '\n') {
+            int diameter = serial_input.toInt();
+            Serial.println(String("Set new wheel diameter: ") + diameter);
+            set_wheel_diameter(diameter);
+            calc_wheel_length();
+            serial_input = "";
         }
     }
 
