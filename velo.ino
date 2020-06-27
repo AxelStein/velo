@@ -14,6 +14,7 @@
 #define EEPROM_WHEEL_DIAMETER 0
 #define EEPROM_PWR_SAVE_MODE 1
 #define WHEEL_ROTATION_MAX 5
+#define WHEEL_RPM_MAX 600
 #define MENU_MAIN 0
 #define MENU_SPEED 1
 #define MENU_RPM 2
@@ -26,7 +27,7 @@ boolean pwr_save_mode;
 char buf[BUF_SIZE];
 char str_tmp[6];
 uint8_t display_menu;
-boolean wake_up;
+boolean sleep_mode;
 
 boolean btn_pressed;
 boolean btn_long_pressed;
@@ -59,6 +60,8 @@ void setup() {
     pwr_save_mode = EEPROM.read(EEPROM_PWR_SAVE_MODE);
     calc_wheel_length(EEPROM.read(EEPROM_WHEEL_DIAMETER));
     display_data();
+
+    attachInterrupt(digitalPinToInterrupt(WHEEL_PIN), detect_rotation, RISING);
 }
 
 void calc_wheel_length(int wheel_diameter) {
@@ -101,7 +104,7 @@ void display_data() {
 
             // distance
             display.setCursor(0, 16);
-            dtostrf(distance, 4, 1, str_tmp);
+            dtostrf(distance, 4, 2, str_tmp);
             snprintf(buf, BUF_SIZE, "%s km", str_tmp);
             display.print(buf);
             break;
@@ -172,13 +175,9 @@ void enable_pwr_save_mode(boolean enable) {
     EEPROM.write(EEPROM_PWR_SAVE_MODE, pwr_save_mode);
 }
 
-void go_wake_up() {
-    wake_up = true;
-}
-
-void go_sleep() {
+void enable_sleep_mode() {
     turn_display(false);
-    attachInterrupt(digitalPinToInterrupt(WHEEL_PIN), go_wake_up, CHANGE);
+    sleep_mode = true;
     LowPower.powerDown(SLEEP_FOREVER, ADC_OFF, BOD_OFF);
 }
 
@@ -237,18 +236,15 @@ void handle_btn_click(uint8_t pin_state, unsigned long timer_now) {
     }
 }
 
-void detect_wheel_rotation(uint8_t pin_state, unsigned long timer_now) {
-    if (pin_state == LOW && !wheel_pin_enabled) {
-        wheel_pin_enabled = true;
-        wheel_rotation_last_time = timer_now;
-        if (wheel_rotation_start_time == 0) {
-            wheel_rotation_start_time = timer_now;
-        }
-        wheel_rotation_counter++;
-        distance += wheel_length;
-    } else if (pin_state == HIGH) {
-        wheel_pin_enabled = false;
+void detect_rotation() {
+    unsigned long timer_now = millis();
+    wheel_rotation_last_time = timer_now;
+    if (wheel_rotation_start_time == 0) {
+        wheel_rotation_start_time = timer_now;
     }
+
+    wheel_rotation_counter++;
+    distance += wheel_length;
 }
 
 void calc_speed(unsigned long timer_now) {
@@ -257,42 +253,32 @@ void calc_speed(unsigned long timer_now) {
         float avg_interval = interval / WHEEL_ROTATION_MAX;
         avg_interval = 1000 / avg_interval;
 
-        uint16_t curr_wheel_rpm = avg_interval * 60;
-        float curr_speed = curr_wheel_rpm * 60 * wheel_length;
+        uint16_t rpm = avg_interval * 60;
+        if (rpm < WHEEL_RPM_MAX) {
+            wheel_rpm = rpm;
+            speed = wheel_rpm * 60 * wheel_length;
+            if (speed >= max_speed) {
+                max_speed = speed;
+            }
 
-        // speed limit reached
-        if (curr_speed >= 70.0) {
-            goto reset_counter;
+            calc_avg_speed(speed);
+            display_data();
         }
 
-        wheel_rpm = curr_wheel_rpm;
-        speed = curr_speed;
-        if (speed >= max_speed) {
-            max_speed = speed;
-        }
-
-        calc_avg_speed(speed);
-        display_data();
-
-        reset_counter:
         wheel_rotation_counter = 0;
         wheel_rotation_start_time = 0;
     }
 }
 
 void loop() {
-    if (wake_up) {
-        wake_up = false;
+    if (sleep_mode) {
+        sleep_mode = false;
         turn_display(true);
-        detachInterrupt(digitalPinToInterrupt(WHEEL_PIN));
     }
 
     unsigned long timer_now = millis();
 
     handle_btn_click(digitalRead(BTN_PIN), timer_now);
-
-    detect_wheel_rotation(digitalRead(WHEEL_PIN), timer_now);
-    
     calc_speed(timer_now);
     
     // idle
@@ -310,7 +296,7 @@ void loop() {
     if (timer_now - wheel_rotation_last_time >= 20000) { // 20 sec
         wheel_rotation_last_time = 0;
         if (pwr_save_mode) {
-            go_sleep();
+            enable_sleep_mode();
         }
     }
 
