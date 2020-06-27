@@ -6,44 +6,45 @@
 #include <Adafruit_GFX.h>
 #include <Adafruit_SSD1306.h>
 
+#define BUF_SIZE 11
 #define WHEEL_PIN 2
 #define PEDAL_PIN 3
 #define BTN_PIN 4
 #define LONG_PRESS_TIME 750
 #define EEPROM_WHEEL_DIAMETER 0
 #define EEPROM_PWR_SAVE_MODE 1
-#define WHEEL_COUNTER_VALUE 5
-#define MENU_WHEEL 0
+#define WHEEL_ROTATION_MAX 5
+#define MENU_MAIN 0
 #define MENU_SPEED 1
-#define MENU_DISTANCE 2
+#define MENU_RPM 2
 #define MENU_POWER 3
 #define MENU_VOLTAGE 4
 
 Adafruit_SSD1306 display(128, 32, &Wire, -1);
+boolean display_turned;
+boolean pwr_save_mode;
+char buf[BUF_SIZE];
+char str_tmp[6];
+uint8_t display_menu;
+boolean wake_up;
 
-float wheel_length; // km
-uint8_t wheel_pin;
-boolean wheel_pin_enabled;
-uint16_t wheel_counter;
-uint16_t wheel_rpm;
-float wheel_speed; // km/h
-float max_wheel_speed; // km/h
-float avg_wsp[5];
-uint8_t avg_wsp_cnt;
-float avg_wheel_speed; // km/h
-unsigned long wheel_timer; // ms
-unsigned long wheel_start_timer; // ms
-float distance; // km
-uint8_t cadence;
-uint8_t btn_state;
 boolean btn_pressed;
 boolean btn_long_pressed;
 unsigned long btn_timer; // ms
-boolean display_turned;
-uint8_t display_menu;
-boolean pwr_save_mode;
-boolean wake_up;
-unsigned long timer_now; // ms
+
+float wheel_length; // km
+float distance; // km
+
+boolean wheel_pin_enabled;
+uint16_t wheel_rotation_counter;
+unsigned long wheel_rotation_last_time; // ms
+unsigned long wheel_rotation_start_time; // ms
+uint16_t wheel_rpm;
+float speed; // km/h
+float max_speed; // km/h
+float avg_speed; // km/h
+float speed_arr[5];
+uint8_t speed_arr_index;
 
 void setup() {
     pinMode(BTN_PIN, INPUT_PULLUP);
@@ -60,16 +61,6 @@ void setup() {
     display_data();
 }
 
-void go_wake_up() {
-    wake_up = true;
-}
-
-void go_sleep() {
-    turn_display(false);    
-    attachInterrupt(digitalPinToInterrupt(WHEEL_PIN), go_wake_up, CHANGE);
-    LowPower.powerDown(SLEEP_FOREVER, ADC_OFF, BOD_OFF);
-}
-
 void calc_wheel_length(int wheel_diameter) {
     if (wheel_diameter == 255) {
         wheel_diameter = 65; // default
@@ -79,9 +70,13 @@ void calc_wheel_length(int wheel_diameter) {
     wheel_length = wheel_diameter / 100000.0;
 }
 
-void enable_pwr_save_mode(boolean enable) {
-    pwr_save_mode = !pwr_save_mode;
-    EEPROM.write(EEPROM_PWR_SAVE_MODE, pwr_save_mode);
+void turn_display(boolean on) {
+    display_turned = on;
+    if (on) {
+        display.ssd1306_command(SSD1306_DISPLAYON);
+    } else {
+        display.ssd1306_command(SSD1306_DISPLAYOFF);
+    }
 }
 
 void switch_display_menu() {
@@ -97,30 +92,39 @@ void display_data() {
     display.setTextColor(SSD1306_WHITE);
 
     switch(display_menu) {
-        case MENU_WHEEL:
+        case MENU_MAIN:
             // speed
             display.setCursor(0, 0);
-            display.print(wheel_speed + String(" km/h"));
-    
-            // rpm
+            dtostrf(speed, 4, 1, str_tmp);
+            snprintf(buf, BUF_SIZE, "%s km/h", str_tmp);
+            display.print(buf);
+
+            // distance
             display.setCursor(0, 16);
-            display.print(wheel_rpm + String(" rpm"));
+            dtostrf(distance, 4, 1, str_tmp);
+            snprintf(buf, BUF_SIZE, "%s km", str_tmp);
+            display.print(buf);
             break;
             
         case MENU_SPEED:
             // max speed
             display.setCursor(0, 0);
-            display.print(max_wheel_speed + String(" km/h"));
+            dtostrf(max_speed, 4, 1, str_tmp);
+            snprintf(buf, BUF_SIZE, "%s km/h", str_tmp);
+            display.print(buf);
             
             // avg speed
             display.setCursor(0, 16);
-            display.print(avg_wheel_speed + String(" km/h"));
+            dtostrf(avg_speed, 4, 1, str_tmp);
+            snprintf(buf, BUF_SIZE, "%s km/h", str_tmp);
+            display.print(buf);
             break;
 
-        case MENU_DISTANCE:
-            // distance
+        case MENU_RPM:
+            // rpm
             display.setCursor(0, 0);
-            display.print(distance + String(" km"));
+            snprintf(buf, BUF_SIZE, "%d rpm", wheel_rpm);
+            display.print(buf);
             break;
             
         case MENU_POWER: // power save mode
@@ -146,26 +150,7 @@ void display_data() {
             break;
     }
 
-    /*
-    if (display_menu == 4) { // sick!!!
-        display.setCursor(0, 0);
-        display.print("diameter:");
-    
-        display.setCursor(0, 16);
-        display.print(EEPROM.read(EEPROM_WHEEL_DIAMETER) + String(" cm"));
-    }
-    */
-    
     display.display();
-}
-
-void turn_display(boolean on) {
-    display_turned = on;
-    if (on) {
-        display.ssd1306_command(SSD1306_DISPLAYON);
-    } else {
-        display.ssd1306_command(SSD1306_DISPLAYOFF);
-    }
 }
 
 float read_voltage() {
@@ -182,27 +167,116 @@ float read_voltage() {
     return result / 1000.0;
 }
 
-void calc_avg_speed(float wsp) {
-    if (wsp == 0) {
+void enable_pwr_save_mode(boolean enable) {
+    pwr_save_mode = !pwr_save_mode;
+    EEPROM.write(EEPROM_PWR_SAVE_MODE, pwr_save_mode);
+}
+
+void go_wake_up() {
+    wake_up = true;
+}
+
+void go_sleep() {
+    turn_display(false);
+    attachInterrupt(digitalPinToInterrupt(WHEEL_PIN), go_wake_up, CHANGE);
+    LowPower.powerDown(SLEEP_FOREVER, ADC_OFF, BOD_OFF);
+}
+
+void calc_avg_speed(float speed) {
+    if (speed == 0) {
         return;
     }
     
-    avg_wsp[avg_wsp_cnt] = wsp;
-    avg_wsp_cnt++;
+    speed_arr[speed_arr_index++] = speed;
     
-    if (avg_wsp_cnt == 5) {
-        avg_wsp_cnt = 0;
-        float a = 0;
+    if (speed_arr_index == 5) {
+        speed_arr_index = 0;
+        float sum = 0;
         for (uint8_t i = 0; i < 5; i++) {
-            a += avg_wsp[i];
+            sum += speed_arr[i];
         }
         
-        a /= 5;
-        if (avg_wheel_speed == 0) {
-            avg_wheel_speed = a;
+        sum /= 5;
+        if (avg_speed == 0) {
+            avg_speed = sum;
         } else {
-            avg_wheel_speed = (avg_wheel_speed + a) / 2;
+            avg_speed = (avg_speed + sum) / 2;
         }
+    }
+}
+
+void handle_btn_click(uint8_t pin_state, unsigned long timer_now) {
+    // click start
+    if (!btn_pressed && pin_state == LOW) {
+        btn_pressed = true;
+        btn_timer = timer_now;
+    }
+    
+    // handle single button click
+    if (btn_pressed && pin_state == HIGH) {
+        btn_pressed = false;
+        if (!btn_long_pressed && display_turned) { // single press
+            switch_display_menu();
+            display_data();
+        }
+        btn_long_pressed = false;
+    }
+    
+    // handle long button click
+    if (btn_pressed && !btn_long_pressed && ((timer_now - btn_timer) >= LONG_PRESS_TIME)) {
+        btn_long_pressed = true;
+        if (display_menu == MENU_POWER) {
+            enable_pwr_save_mode(!pwr_save_mode);
+            display_data();
+            if (pwr_save_mode) {
+                wheel_rotation_last_time = timer_now; // fixme
+            }
+        } else {
+            turn_display(!display_turned); // todo turn on bluetooth
+        }
+    }
+}
+
+void detect_wheel_rotation(uint8_t pin_state, unsigned long timer_now) {
+    if (pin_state == LOW && !wheel_pin_enabled) {
+        wheel_pin_enabled = true;
+        wheel_rotation_last_time = timer_now;
+        if (wheel_rotation_start_time == 0) {
+            wheel_rotation_start_time = timer_now;
+        }
+        wheel_rotation_counter++;
+        distance += wheel_length;
+    } else if (pin_state == HIGH) {
+        wheel_pin_enabled = false;
+    }
+}
+
+void calc_speed(unsigned long timer_now) {
+    if (wheel_rotation_counter == WHEEL_ROTATION_MAX) {
+        unsigned long interval = timer_now - wheel_rotation_start_time;
+        float avg_interval = interval / WHEEL_ROTATION_MAX;
+        avg_interval = 1000 / avg_interval;
+
+        uint16_t curr_wheel_rpm = avg_interval * 60;
+        float curr_speed = curr_wheel_rpm * 60 * wheel_length;
+
+        // speed limit reached
+        if (curr_speed >= 70.0) {
+            goto reset_counter;
+        }
+
+        wheel_rpm = curr_wheel_rpm;
+        speed = curr_speed;
+        if (speed >= max_speed) {
+            max_speed = speed;
+        }
+
+        calc_avg_speed(speed);
+        display_data();
+
+        reset_counter:
+        wheel_rotation_counter = 0;
+        wheel_rotation_start_time = 0;
     }
 }
 
@@ -213,78 +287,28 @@ void loop() {
         detachInterrupt(digitalPinToInterrupt(WHEEL_PIN));
     }
 
-    timer_now = millis();
+    unsigned long timer_now = millis();
 
-    btn_state = digitalRead(BTN_PIN);
-    if (!btn_pressed && btn_state == LOW) {
-        btn_pressed = true;
-        btn_timer = timer_now;
-    }
-    if (btn_pressed && btn_state == HIGH) {
-        btn_pressed = false;
-        if (!btn_long_pressed && display_turned) { // single press
-            switch_display_menu();
-            display_data();
-        }
-        btn_long_pressed = false;
-    }
-    if (btn_pressed && !btn_long_pressed && timer_now - btn_timer >= LONG_PRESS_TIME) {
-        btn_long_pressed = true;
-        if (display_menu == MENU_POWER) {
-            enable_pwr_save_mode(!pwr_save_mode);
-            display_data();
-            if (pwr_save_mode) {
-                wheel_timer = timer_now; // fixme
-            }
-        } else {
-            turn_display(!display_turned); // todo turn on bluetooth
-        }
-    }
+    handle_btn_click(digitalRead(BTN_PIN), timer_now);
 
-    /*-----------------------------------------------------------------------------*/
-    wheel_pin = digitalRead(WHEEL_PIN);
-    if (wheel_pin == LOW && !wheel_pin_enabled) {
-        wheel_pin_enabled = true;
-        wheel_timer = timer_now;
-        if (wheel_start_timer == 0) {
-            wheel_start_timer = timer_now;
-        }
-        wheel_counter++;
-        distance += wheel_length;
-        //Serial.println(wheel_counter);
-    } else if (wheel_pin == HIGH) {
-        wheel_pin_enabled = false;
-    }
-
-    if (wheel_counter == WHEEL_COUNTER_VALUE) {
-        unsigned long interval = timer_now - wheel_start_timer;
-        //Serial.println(interval + String(" ms"));
-        float avg = interval / WHEEL_COUNTER_VALUE;
-        avg = 1000 / avg;
-        wheel_rpm = avg * 60;
-        wheel_speed = wheel_rpm * 60 * wheel_length;
-        if (wheel_speed >= max_wheel_speed) {
-            max_wheel_speed = wheel_speed;
-        }
-        calc_avg_speed(wheel_speed);
-        display_data();
-        
-        //Serial.println(wheel_speed + String(" km/h; ") + wheel_rpm + String(" rpm"));
-        
-        wheel_counter = 0;
-        wheel_start_timer = 0;
-    }
-    if (timer_now - wheel_timer >= 3000) {
-        if (wheel_speed != 0 || (wheel_counter < WHEEL_COUNTER_VALUE && wheel_counter > 0)) {
-            wheel_speed = 0;
+    detect_wheel_rotation(digitalRead(WHEEL_PIN), timer_now);
+    
+    calc_speed(timer_now);
+    
+    // idle
+    if (timer_now - wheel_rotation_last_time >= 3000) {
+        if (speed != 0 || (0 < wheel_rotation_counter && wheel_rotation_counter < WHEEL_ROTATION_MAX)) {
+            speed = 0;
             wheel_rpm = 0;
-            wheel_counter = 0;
-            wheel_start_timer = 0;
+            wheel_rotation_counter = 0;
+            wheel_rotation_start_time = 0;
             display_data();
         }
     }
-    if (timer_now - wheel_timer >= 30000) { // 30 sec
-        wheel_timer = 0;
+    
+    // sleep
+    if (timer_now - wheel_rotation_last_time >= 20000) { // 20 sec
+        wheel_rotation_last_time = 0;
         if (pwr_save_mode) {
             go_sleep();
         }
@@ -292,71 +316,3 @@ void loop() {
 
     delay(10);
 }
-
-/*-----------------------------------------------------------------------------*/
-    /*
-    pedal_pin = digitalRead(PEDAL_PIN);
-    if (pedal_pin == LOW && !pedal_pin_high) {
-        pedal_pin_high = true;
-        if (pedal_timer != 0) {
-            pedal_interval += (timer_now - pedal_timer);
-            pedal_interval_counter++;
-        }
-        pedal_timer = timer_now;
-    } else if (pedal_pin == HIGH) {
-        pedal_pin_high = false;
-    }
-
-    if (pedal_interval >= 3000) {
-        float avg = pedal_interval / pedal_interval_counter; // average interval
-        avg = 1000 / avg;
-        
-        cadence = avg * 60;
-        digitalWrite(LED_PIN, (cadence >= 70 && cadence <= 100) ? HIGH : LOW);
-        display_data();
-        
-        pedal_interval = 0;
-        pedal_interval_counter = 0;
-    } else if (pedal_timer != 0 && (timer_now - pedal_timer) >= 3000) { // idle
-        pedal_timer = 0;
-        
-        cadence = 0;
-        digitalWrite(LED_PIN, LOW);
-        display_data();
-    }
-    */
-    
-//uint8_t pedal_pin;
-//boolean pedal_pin_high;
-//unsigned long pedal_interval; // ms
-//uint16_t pedal_interval_counter;
-//unsigned long pedal_timer; // ms
-//#define CMD_SET_WHEEL_DIAMETER 0
-//String bt_cmd; // bluetooth command
-//uint8_t bt_cmd_val = -1;
-/*
-    while (Serial.available()) { // пока приходят данные
-        char c = Serial.read(); // считываем их
-        if (c == '#') {
-            bt_cmd_val = CMD_SET_WHEEL_DIAMETER;
-            continue;
-        }
-        bt_cmd += c; // и формируем строку
-        delay(1);
-    }
-
-    switch (bt_cmd_val) {
-        case CMD_SET_WHEEL_DIAMETER:
-            int wheel_diameter = bt_cmd.toInt();
-            EEPROM.write(0, wheel_diameter);
-            calc_wheel_length(wheel_diameter);
-
-            digitalWrite(LED_PIN, HIGH);
-            delay(500);
-            digitalWrite(LED_PIN, LOW);
-            break;
-    }
-    bt_cmd_val = -1;
-    */
-
-    /*-----------------------------------------------------------------------------*/
