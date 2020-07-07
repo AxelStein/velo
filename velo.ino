@@ -15,6 +15,7 @@
 #define LONG_PRESS_TIME 750
 #define EEPROM_WHEEL_DIAMETER 0
 #define EEPROM_PWR_SAVE_MODE 1
+#define EEPROM_LED_AUTO 2
 #define WHEEL_ROTATION_MAX 5
 #define WHEEL_RPM_MAX 600
 #define MENU_MAIN 0
@@ -36,6 +37,7 @@ char str_tmp[6];
 uint8_t display_menu;
 boolean sleep_mode;
 boolean led_turned;
+boolean led_auto;
 
 boolean btn_pressed;
 boolean btn_long_pressed;
@@ -71,6 +73,11 @@ void setup() {
 
     display_turned = true;
     pwr_save_mode = EEPROM.read(EEPROM_PWR_SAVE_MODE);
+    led_auto = EEPROM.read(EEPROM_LED_AUTO);
+    if (led_auto) {
+        // get current time
+        // turn led
+    }
     calc_wheel_length();
     display_data();
 }
