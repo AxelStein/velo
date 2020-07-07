@@ -62,9 +62,10 @@ void setup() {
     pinMode(LED_PIN, OUTPUT);
     
     Serial.begin(9600);
-    delay(2000);
-    
+    Wire.begin();
     display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
+    display.dim(false);
+    display.setTextWrap(false);
     display.display();
     delay(2000);
 
