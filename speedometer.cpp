@@ -70,7 +70,7 @@ void Speedometer::detect_rotation() {
   
         wheel_rotation_counter++;
         if (wheel_rotation_counter == 5) {
-            calc_speed(timer_now);
+            calc_speed();
 
             wheel_rotation_counter = 0;
             wheel_rotation_start_time = 0;
@@ -86,8 +86,8 @@ void Speedometer::detect_rotation() {
     }
 }
 
-void Speedometer::calc_speed(uint32_t timer_now) {
-    uint32_t interval = timer_now - wheel_rotation_start_time;
+void Speedometer::calc_speed() {
+    uint32_t interval = wheel_rotation_last_time - wheel_rotation_start_time;
     uint16_t avg_interval = interval / 4;
 
     uint16_t rpm = 60000 / avg_interval;
@@ -97,31 +97,29 @@ void Speedometer::calc_speed(uint32_t timer_now) {
         if (speed >= max_speed) {
             max_speed = speed;
         }
-        calc_avg_speed(speed);
+
+        if (speed != 0) {
+            speed_arr[speed_arr_index++] = speed;
+            if (speed_arr_index == 4) {
+                calc_avg_speed();
+                
+                speed_arr_index = 0;
+            }
+        }
     }
 }
 
-void Speedometer::calc_avg_speed(float speed) {
-    if (speed == 0) {
-        return;
+void Speedometer::calc_avg_speed() {
+    float sum = 0;
+    for (uint8_t i = 0; i < 4; i++) {
+        sum += speed_arr[i];
     }
     
-    speed_arr[speed_arr_index++] = speed;
-    
-    if (speed_arr_index == 4) {
-        speed_arr_index = 0;
-        
-        float sum = 0;
-        for (uint8_t i = 0; i < 4; i++) {
-            sum += speed_arr[i];
-        }
-        
-        sum /= 4;
-        if (avg_speed == 0) {
-            avg_speed = sum;
-        } else {
-            avg_speed = (avg_speed + sum) / 2;
-        }
+    sum /= 4;
+    if (avg_speed == 0) {
+        avg_speed = sum;
+    } else {
+        avg_speed = (avg_speed + sum) / 2;
     }
 }
 

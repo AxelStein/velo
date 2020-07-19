@@ -59,14 +59,12 @@ class Speedometer {
         /**
          * Calculate current speed, rpm and average speed after 5 wheel rotations
          */
-        void calc_speed(uint32_t timer_now);
+        void calc_speed();
 
         /**
          * Calculate average speed
-         * 
-         * @param speed 
          */
-        void calc_avg_speed(float speed);
+        void calc_avg_speed();
 
         uint8_t WHEEL_PIN;
         float WHEEL_LENGTH;
