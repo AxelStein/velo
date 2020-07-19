@@ -7,6 +7,7 @@
 #define WHEEL_PIN 2
 #define BTN_PIN 3
 #define LED_PIN 4
+#define VIBRO_PIN 5
 #define SINGLE_PRESS_TIME 50
 #define LONG_PRESS_TIME 500
 #define MENU_MAIN 0
@@ -34,9 +35,17 @@ bool btn_pressed;
 bool btn_long_pressed;
 uint32_t btn_timer;
 
+/*
+uint32_t drink_water_timer;
+bool drink_water_reminder_enabled;
+uint32_t vibro_timer;
+uint8_t vibro_counter;
+*/
+
 void setup() {
     pinMode(BTN_PIN, INPUT_PULLUP);
     pinMode(LED_PIN, OUTPUT);
+    pinMode(VIBRO_PIN, OUTPUT);
 
     sp.init(WHEEL_PIN, calc_wheel_length(), EEPROM_TOTAL_DISTANCE);
     init_display();
@@ -45,8 +54,8 @@ void setup() {
 void init_display() {
     display.begin(&Adafruit128x32, I2C_ADDRESS, -1);
     display.setFont(Adafruit5x7);
-    display.clear();
     display.set2X();
+    display.clear();
     display_data();
 }
 
@@ -77,6 +86,31 @@ void loop() {
         PORTD ^= _BV(LED_PIN);
         led_timer = timer_now;
     }
+
+    /*
+    // enable drink water reminder every 20 min
+    // todo timer
+    timer_diff = timer_now - drink_water_timer;
+    if (timer_diff >= 1383000) {
+        drink_water_reminder_enabled = true;
+        drink_water_timer = timer_now;
+    }
+
+    // turn on vibro
+    if (drink_water_reminder_enabled) {
+        timer_diff = timer_now - vibro_timer;
+        if (timer_diff >= 250) {
+            PORTD ^= _BV(VIBRO_PIN);
+            vibro_timer = timer_now;
+            vibro_counter++;
+        }
+        // turn off vibro after 2 sec
+        if (vibro_counter == 9) {
+            drink_water_reminder_enabled = false;
+            vibro_counter = 0;
+        }
+    }
+    */
 }
 
 float calc_wheel_length() {
