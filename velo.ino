@@ -1,10 +1,8 @@
 #include <EEPROM.h>
-#include <SPI.h>
-#include <Wire.h>
-#include <Adafruit_GFX.h>
-#include <Adafruit_SSD1306.h>
 #include "std_format.h"
 #include "speedometer.h"
+#include <SSD1306Ascii.h>
+#include <SSD1306AsciiAvrI2c.h>
 
 #define WHEEL_PIN 2
 #define BTN_PIN 3
@@ -19,10 +17,11 @@
 #define MENU_LED 5
 #define EEPROM_WHEEL_DIAMETER 0
 #define EEPROM_TOTAL_DISTANCE 1
+#define I2C_ADDRESS 0x3C
 
 Speedometer sp;
 
-Adafruit_SSD1306 display(128, 32, &Wire, -1);
+SSD1306AsciiAvrI2c display;
 bool display_turned;
 uint8_t display_menu;
 uint32_t display_timer;
@@ -44,17 +43,10 @@ void setup() {
 }
 
 void init_display() {
-    Wire.begin();
-    display.begin(SSD1306_SWITCHCAPVCC, 0x3C);
-    display.dim(false);
-    display.setTextWrap(false);
-    display.setTextSize(2);
-    display.setTextColor(SSD1306_WHITE);
-    display.display();
-    display_turned = true;
-    
-    delay(2000);
-
+    display.begin(&Adafruit128x32, I2C_ADDRESS, -1);
+    display.setFont(Adafruit5x7);
+    display.clear();
+    display.set2X();
     display_data();
 }
 
@@ -148,7 +140,7 @@ void turn_led(boolean on) {
 
 void turn_display(boolean on) {
     display_turned = on;
-    display.ssd1306_command(on ? SSD1306_DISPLAYON : SSD1306_DISPLAYOFF);
+    display.ssd1306WriteCmd(on ? SSD1306_DISPLAYON : SSD1306_DISPLAYOFF);
 }
 
 void switch_display_menu() {
@@ -159,7 +151,7 @@ void switch_display_menu() {
 }
 
 void display_data() {
-    display.clearDisplay();
+    display.clear();
     
     switch(display_menu) {
         case MENU_MAIN:
@@ -243,6 +235,4 @@ void display_data() {
             display.print(led_turned ? "on" : "off");
             break;
     }
-
-    display.display();
 }
