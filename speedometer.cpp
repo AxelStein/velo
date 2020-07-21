@@ -125,7 +125,6 @@ void Speedometer::calc_avg_speed() {
 
 void Speedometer::save_total_distance() {
     total_distance += period_distance;
-    EEPROM.put(EEPROM_TOTAL_DISTANCE, total_distance);
-    
     period_distance = 0;
+    EEPROM.put(EEPROM_TOTAL_DISTANCE, total_distance);
 }

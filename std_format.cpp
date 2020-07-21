@@ -41,8 +41,7 @@ void std_ftoa(float f, int precision, char *buf) {
         d *= pow(10, precision);  // convert floating part to string
     
         // round floating part
-        float dx = fmod(d, 1);
-        if (dx < 0.5) {
+        if (fmod(d, 1) < 0.5) {
           d = floor(d);
         } else {
           d = ceilf(d);

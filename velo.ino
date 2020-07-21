@@ -25,10 +25,9 @@ Speedometer sp;
 SSD1306AsciiAvrI2c display;
 bool display_turned;
 uint8_t display_menu;
-// uint32_t display_timer;
 char buf[11];
-volatile bool upd_time;
-volatile bool upd_speed;
+volatile bool timer_tick;
+uint8_t sec_cnt;
 
 bool led_turned;
 uint32_t led_timer;
@@ -61,33 +60,21 @@ void init_timers() {
     TCNT1 = 0;
 
     // set ctc mode
-    TCCR1A |= _BV(WGM12);
     TCCR1B |= _BV(WGM12);
 
-    OCR1A = 15625;  // update time every sec
-    OCR1B = 62500;  // update speed every 4 sec
+    OCR1A = 0x3D09;  // update every sec
     
     // set 1024 prescaler
-    TCCR1A |= _BV(CS12) | _BV(CS10);
     TCCR1B |= _BV(CS12) | _BV(CS10);
 
     // enable timer compare interrupt
-    TIMSK1 |= _BV(OCIE1A) | _BV(OCIE1B);
-    TIFR1 |= _BV(OCF1A) | _BV(OCF1B);
+    TIMSK1 |= _BV(OCIE1A);
 
     sei();
 }
 
 ISR(TIMER1_COMPA_vect) {
-    if (display_menu == MENU_TIME) {
-        upd_time = true;
-    }
-}
-
-ISR(TIMER1_COMPB_vect) {
-    if (display_menu == MENU_MAIN || display_menu == MENU_RPM) {
-        upd_speed = true;
-    }
+    timer_tick = true;
 }
 
 void loop() {
@@ -118,12 +105,27 @@ void loop() {
                 break;
         }
     }
-    
-    if (upd_time || (upd_speed && sp.get_speed() > 0)) {
-        display_data();
-        upd_time = false;
-        upd_speed = false;
-        // display_timer = timer_now;
+
+    if (timer_tick) {
+        timer_tick = false;
+        switch (display_menu) {
+            case MENU_MAIN:
+            case MENU_RPM: {
+                if (++sec_cnt == 4) {
+                    sec_cnt = 0;
+                    // update speed or rpm every 4 sec
+                    if (sp.get_speed() > 0) {
+                        display_data();
+                    }
+                }
+                break;
+            }
+
+            case MENU_TIME:
+                // update time every sec
+                display_data();
+                break;
+        }
     }
 
     // toggle led every 250 ms
@@ -133,16 +135,6 @@ void loop() {
         led_timer = timer_now;
     }
 }
-
-/*
-    uint32_t timer_diff = timer_now - display_timer;
-    
-    // update time every sec
-    bool upd_time = display_menu == MENU_TIME && timer_diff >= 1000;
-
-    // update speed every 4 sec
-    bool upd_speed = (display_menu == MENU_MAIN || display_menu == MENU_RPM) && sp.get_speed() > 0 && timer_diff >= 4000;
-    */
 
 float calc_wheel_length() {
     uint8_t diameter = EEPROM.read(EEPROM_WHEEL_DIAMETER);  // cm
