@@ -9,7 +9,6 @@
 #define WHEEL_PIN 2
 #define BTN_PIN 3
 #define LED_PIN 5
-#define LONG_PRESS_TIME 500
 #define MENU_MAIN 0
 #define MENU_SPEED 1
 #define MENU_RPM 2
@@ -45,6 +44,7 @@ void setup() {
 }
 
 void init_display() {
+    delay(2000);
     display.begin(&Adafruit128x32, I2C_ADDRESS, -1);
     display.setFont(Adafruit5x7);
     display.set2X();
@@ -227,7 +227,7 @@ void display_data() {
             display.setCursor(0, 0);
             display.print("time:");
 
-            display.setCursor(0, 16);
+            display.setCursor(0, 2);
             std_itoa(hours, 2, buf);
             display.print(buf);
             display.print(":");
